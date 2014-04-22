@@ -3,6 +3,7 @@ require "pundit/policy_finder"
 require "active_support/concern"
 require "active_support/core_ext/string/inflections"
 require "active_support/core_ext/object/blank"
+require "active_support/core_ext/hash/keys"
 
 module Pundit
   class NotAuthorizedError < StandardError
@@ -23,6 +24,15 @@ module Pundit
       PolicyFinder.new(scope).scope!.new(user, scope).resolve
     end
 
+    def policy_attributes(user, record)
+      policy_attributes = PolicyFinder.new(record).attributes
+      policy_attributes.new(user, record).permitted_attributes if policy_attributes
+    end
+
+    def policy_attributes!(user, record)
+      PolicyFinder.new(record).attributes!.new(user, record).permitted_attributes
+    end
+
     def policy(user, record)
       policy = PolicyFinder.new(record).policy
       policy.new(user, record) if policy
@@ -35,18 +45,23 @@ module Pundit
 
   included do
     if respond_to?(:helper_method)
-      helper_method :policy_scope
       helper_method :policy
+      helper_method :policy_scope
+      helper_method :policy_attributes
+      helper_method :policy_params
       helper_method :pundit_user
     end
     if respond_to?(:hide_action)
-      hide_action :policy_scope
-      hide_action :policy_scope=
       hide_action :policy
       hide_action :policy=
+      hide_action :policy_scope
+      hide_action :policy_scope=
+      hide_action :policy_attributes
+      hide_action :policy_attributes=
       hide_action :authorize
       hide_action :verify_authorized
       hide_action :verify_policy_scoped
+      hide_action :policy_params
       hide_action :pundit_user
     end
   end
@@ -79,6 +94,30 @@ module Pundit
     @policy_scope or Pundit.policy_scope!(pundit_user, scope)
   end
   attr_writer :policy_scope
+
+  def policy_attributes(symbol_or_record)
+    @policy_attributes or Pundit.policy_attributes!(pundit_user, symbol_or_record)
+  end
+  attr_writer :policy_attributes
+
+  def policy_params(symbol_or_record)
+    symbol = if symbol_or_record.is_a?(Symbol)
+      symbol_or_record
+    else
+      PolicyFinder.new(symbol_or_record).params_key
+    end
+
+    permitted_attributes = policy_attributes(symbol_or_record).map(&:to_s)
+
+    if defined?(ActionController::Parameters)
+      binding.pry
+      parameters = ActionController::Parameters.new(params)
+      parameters.require(symbol).permit(*permitted_attributes)
+    else
+      attributes = params.fetch(symbol) { raise "Missing params[#{symbol}]" }
+      attributes.stringify_keys.slice(*permitted_attributes)
+    end
+  end
 
   def policy(record)
     @policy or Pundit.policy!(pundit_user, record)
