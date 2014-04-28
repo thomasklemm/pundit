@@ -21,7 +21,13 @@ class PostPolicy::Scope < Struct.new(:user, :scope)
 end
 class PostPolicy::Attributes < Struct.new(:user, :post)
   def permitted_attributes
-    %w(title)
+    if user.admin?
+      %w(title body tags meta)
+    elsif post.published?
+      %w(title body tags)
+    else
+      %w()
+    end
   end
 end
 class Post < Struct.new(:user)

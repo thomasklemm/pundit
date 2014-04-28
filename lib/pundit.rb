@@ -110,7 +110,6 @@ module Pundit
     permitted_attributes = policy_attributes(symbol_or_record).map(&:to_s)
 
     if defined?(ActionController::Parameters)
-      binding.pry
       parameters = ActionController::Parameters.new(params)
       parameters.require(symbol).permit(*permitted_attributes)
     else
